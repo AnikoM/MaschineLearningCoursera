@@ -1,0 +1,96 @@
+---
+title: "Practical Maschine Learning Course Project"
+author: "Anikó Medgyesi"
+date: '2017 március 14 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+### Human Activity Recognition
+
+Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community.
+
+
+Source of the data:
+http://groupware.les.inf.puc-rio.br/har
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. We will predict the manner in which they did the exercise.
+## Data preparation
+
+Load the data:
+```{r pml-training}
+library(caret)
+ptrain <- read.csv("pml-training.csv")
+```
+Remove the 'NA'-s and empty values:
+
+```{r clean}
+ptrain<-Filter(function(x)!(mean(sum(is.na(x)))>0.95), ptrain)
+ptrain<-Filter(function(x)!(mean(x=="")>0.95), ptrain)
+# remove variables that aren't important for prediction (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp)
+ptrain <- ptrain[, -(3:5)]
+ptrain<-ptrain[,-(1)]
+#subtitute the remaining na-s with mean
+#ptrain[] <- lapply(ptrain, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+# remove variables with nearly zero variance
+nzv <- nearZeroVar(ptrain)
+ptrain <- ptrain[, -nzv]
+#ptrain$classe<-as.factor(ptrain$classe)
+levels(ptrain$classe)<-c('A','B','C','D','E')
+
+```
+
+## Model building
+
+Create training and test set
+
+```{r data separation }
+
+
+set.seed(60731)
+part1 <- createDataPartition(ptrain$classe, p=0.75, list=FALSE)
+
+validation <- ptrain[-part1,]
+workingSet <- ptrain[part1,]
+```
+Lets build a linear Support Vector Machine modell, which is suitable for these type of classification
+problems.
+```{r LVM}
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+model <-  train(classe ~ ., data = workingSet, method="svmRadial", 
+                trControl=trainControl(method='cv', number=10,allowParallel = TRUE))
+preds <- predict(model, newdata=validation)
+confusionMatrix(validation$classe, preds)
+```
+The confusion matrix shows that we can accept the modell with 0.9992 accuracy
+The modell should be build on the whole training set
+```{r rebuild}
+
+model <-  train(classe ~ ., data = ptrain, method="svmRadial", 
+                trControl=trainControl(method='cv', number=10,allowParallel = TRUE))
+
+```
+
+Let us read and clean the testing set
+```{r testing set}
+ptest <- read.csv("pml-testing.csv")
+ptest<-Filter(function(x)!(mean(sum(is.na(x)))>0.95), ptest)
+ptest<-Filter(function(x)!(mean(x=="")>0.95), ptest)
+# remove variables that aren't important for prediction (  raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp)
+ptest <- ptest[, -(3:5)]
+#subtitute the remaining na-s with mean
+#ptest[] <- lapply(ptest, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+# remove variables with nearly zero variance
+
+
+preds <- predict(model, newdata=ptest)
+ preds
+
+```
