@@ -141,13 +141,14 @@ $(document).ready(function () {
 ptrain&lt;-Filter(function(x)!(mean(x==&quot;&quot;)&gt;0.95), ptrain)
 # remove variables that aren't important for prediction (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp)
 ptrain &lt;- ptrain[, -(3:5)]
+ptrain&lt;-ptrain[,-(1)]
 #subtitute the remaining na-s with mean
-ptrain[] &lt;- lapply(ptrain, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+#ptrain[] &lt;- lapply(ptrain, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
 # remove variables with nearly zero variance
 nzv &lt;- nearZeroVar(ptrain)
 ptrain &lt;- ptrain[, -nzv]
-ptrain$classe&lt;-as.factor(ptrain$classe)
-levels(ptrain$classe)&lt;-c('a1','a2','a3','a4','a5')</code></pre>
+#ptrain$classe&lt;-as.factor(ptrain$classe)
+levels(ptrain$classe)&lt;-c('A','B','C','D','E')</code></pre>
 </div>
 </div>
 <div id="model-building" class="section level2">
@@ -159,8 +160,16 @@ part1 &lt;- createDataPartition(ptrain$classe, p=0.75, list=FALSE)
 validation &lt;- ptrain[-part1,]
 workingSet &lt;- ptrain[part1,]</code></pre>
 <p>Lets build a linear Support Vector Machine modell, which is suitable for these type of classification problems.</p>
-<pre class="r"><code>model &lt;-  train(classe ~ ., data = workingSet, method=&quot;svmRadial&quot;, 
-                trControl=trainControl(method='cv', number=10))</code></pre>
+<pre class="r"><code>library(parallel)
+library(doParallel)</code></pre>
+<pre><code>## Warning: package 'doParallel' was built under R version 3.3.3</code></pre>
+<pre><code>## Loading required package: foreach</code></pre>
+<pre><code>## Warning: package 'foreach' was built under R version 3.3.1</code></pre>
+<pre><code>## Loading required package: iterators</code></pre>
+<pre class="r"><code>cluster &lt;- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+model &lt;-  train(classe ~ ., data = workingSet, method=&quot;svmRadial&quot;, 
+                trControl=trainControl(method='cv', number=10,allowParallel = TRUE))</code></pre>
 <pre><code>## Loading required package: kernlab</code></pre>
 <pre><code>## Warning: package 'kernlab' was built under R version 3.3.2</code></pre>
 <pre><code>## 
@@ -173,57 +182,52 @@ confusionMatrix(validation$classe, preds)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
-## Prediction   a1   a2   a3   a4   a5
-##         a1 1395    0    0    0    0
-##         a2    0  949    0    0    0
-##         a3    0    0  855    0    0
-##         a4    0    0    1  803    0
-##         a5    0    0    0    1  900
+## Prediction    A    B    C    D    E
+##          A 1365    5   23    0    2
+##          B   67  853   24    2    3
+##          C    3   50  790    8    4
+##          D    2    1   90  711    0
+##          E    0    2   17   30  852
 ## 
 ## Overall Statistics
-##                                      
-##                Accuracy : 0.9996     
-##                  95% CI : (0.9985, 1)
-##     No Information Rate : 0.2845     
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16  
-##                                      
-##                   Kappa : 0.9995     
-##  Mcnemar's Test P-Value : NA         
+##                                          
+##                Accuracy : 0.9321         
+##                  95% CI : (0.9247, 0.939)
+##     No Information Rate : 0.293          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.914          
+##  Mcnemar's Test P-Value : &lt; 2.2e-16      
 ## 
 ## Statistics by Class:
 ## 
-##                      Class: a1 Class: a2 Class: a3 Class: a4 Class: a5
-## Sensitivity             1.0000    1.0000    0.9988    0.9988    1.0000
-## Specificity             1.0000    1.0000    1.0000    0.9998    0.9998
-## Pos Pred Value          1.0000    1.0000    1.0000    0.9988    0.9989
-## Neg Pred Value          1.0000    1.0000    0.9998    0.9998    1.0000
-## Prevalence              0.2845    0.1935    0.1746    0.1639    0.1835
-## Detection Rate          0.2845    0.1935    0.1743    0.1637    0.1835
-## Detection Prevalence    0.2845    0.1935    0.1743    0.1639    0.1837
-## Balanced Accuracy       1.0000    1.0000    0.9994    0.9993    0.9999</code></pre>
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9499   0.9363   0.8369   0.9467   0.9895
+## Specificity            0.9913   0.9760   0.9836   0.9776   0.9879
+## Pos Pred Value         0.9785   0.8988   0.9240   0.8843   0.9456
+## Neg Pred Value         0.9795   0.9853   0.9620   0.9902   0.9978
+## Prevalence             0.2930   0.1858   0.1925   0.1531   0.1756
+## Detection Rate         0.2783   0.1739   0.1611   0.1450   0.1737
+## Detection Prevalence   0.2845   0.1935   0.1743   0.1639   0.1837
+## Balanced Accuracy      0.9706   0.9561   0.9102   0.9622   0.9887</code></pre>
 <p>The confusion matrix shows that we can accept the modell with 0.9992 accuracy The modell should be build on the whole training set</p>
 <pre class="r"><code>model &lt;-  train(classe ~ ., data = ptrain, method=&quot;svmRadial&quot;, 
-                trControl=trainControl(method='cv', number=10))</code></pre>
+                trControl=trainControl(method='cv', number=10,allowParallel = TRUE))</code></pre>
 <p>Let us read and clean the testing set</p>
 <pre class="r"><code>ptest &lt;- read.csv(&quot;pml-testing.csv&quot;)
 ptest&lt;-Filter(function(x)!(mean(sum(is.na(x)))&gt;0.95), ptest)
 ptest&lt;-Filter(function(x)!(mean(x==&quot;&quot;)&gt;0.95), ptest)
-# remove variables that aren't important for prediction (X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp)
+# remove variables that aren't important for prediction (  raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp)
 ptest &lt;- ptest[, -(3:5)]
 #subtitute the remaining na-s with mean
-ptest[] &lt;- lapply(ptest, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+#ptest[] &lt;- lapply(ptest, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
 # remove variables with nearly zero variance
-nzv &lt;- nearZeroVar(ptest)
-ptest &lt;- ptest[, -nzv]
-#write into a file
- pml_write_files &lt;- function(x) {
-     n &lt;- length(x)
-     for(i in 1:n) {
-         filename &lt;- paste0(&quot;problem_id_&quot;, i, &quot;.txt&quot;)
-         write.table(x[i], file=filename, quote=F, row.names=F, col.names=F)
-     }
- }
- pml_write_files(preds)</code></pre>
+
+
+preds &lt;- predict(model, newdata=ptest)
+ preds</code></pre>
+<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E</code></pre>
 </div>
 
 
